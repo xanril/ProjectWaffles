@@ -3,7 +3,6 @@
 //
 // Generated with Bot Builder V4 SDK Template for Visual Studio EchoBot v4.9.2
 
-using Bot.Builder.Community.Twitter.Adapter;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Bot.Builder;
