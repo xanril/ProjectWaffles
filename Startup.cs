@@ -34,6 +34,9 @@ namespace ProjectWaffles
 
             // Create the bot as a transient. In this case the ASP Controller is expecting an IBot.
             services.AddTransient<IBot, EchoBot>();
+
+            // Add twitter adapter
+            services.AddTwitterAdapter(x => Configuration.Bind("TwitterOptions", x));
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
@@ -53,6 +56,9 @@ namespace ProjectWaffles
                 {
                     endpoints.MapControllers();
                 });
+
+            // register the middleware for twitter adapter
+            app.UseTwitterAdapter();
 
             // app.UseHttpsRedirection();
         }
