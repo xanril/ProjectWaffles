@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Collections;
+using System.Collections.Generic;
 using System.Configuration;
 using System.Linq;
 using System.Threading.Tasks;
@@ -57,6 +59,8 @@ namespace DirectLineClient
                 continueExistingBotConversationAsync(conversationId, watermark).Wait();
             }
 
+            // comment above code and uncomment below to go directly to a hardcoded conversation and watermark 
+
             //var conversationId = "2TJQMTx4QD990Mn71v0PIB-l";
             //continueExistingBotConversationAsync(conversationId, "0").Wait();
         }
@@ -85,19 +89,24 @@ namespace DirectLineClient
             // Since we are trying to continue a previous conversation, we reconnect to it via conversation ID.
             // If we pass a watermark, it would retrieve all the messages starting from the watermark
             // and send it to us via OnMessage Event.
-            var conversation = await directLineClient.Conversations.ReconnectToConversationAsync(conversationId, watermark);
+            var conversation = await directLineClient.Conversations.ReconnectToConversationAsync(conversationId);
+
+            // We create a connection specific for the conversation
+            var convDirectLineClient = new DirectLineClientConnection(conversation.Token);
 
             // We start the web socket connection.
-            await startWebSocketConnectionAsync(directLineClient, conversation);
+            await startWebSocketConnectionAsync(convDirectLineClient, conversation, watermark);
         }
 
-        private static async Task startWebSocketConnectionAsync(DirectLineClientConnection directLineClient, Conversation conversation)
+        private static async Task startWebSocketConnectionAsync(DirectLineClientConnection directLineClient, Conversation conversation, string watermark = null)
         {
             try
             {
                 using (var webSocketClient = new WebSocket(conversation.StreamUrl))
                 {
+                    // You have to specify TLS version to 1.2 or connection will be failed in handshake.
                     webSocketClient.SslConfiguration.EnabledSslProtocols = System.Security.Authentication.SslProtocols.Tls12;
+
                     webSocketClient.OnMessage += WebSocketClient_OnMessage;
                     webSocketClient.Connect();
 
@@ -109,7 +118,11 @@ namespace DirectLineClient
                     Console.WriteLine("");
 
                     // we wait for the sockets to receive and display initial messages.
-                    await Task.Delay(1000);
+                    if (watermark != null)
+                    {
+                        var activityHistory = await directLineClient.Conversations.GetActivitiesAsync(conversation.ConversationId, watermark);
+                        displayActivity(activityHistory.Activities);
+                    }
 
                     do
                     {
@@ -154,10 +167,17 @@ namespace DirectLineClient
             //                 where x.From.Id == _botId
             //                 select x;
 
-            foreach (Activity activity in activitySet.Activities)
+            displayActivity(activitySet.Activities);
+        }
+
+        private static void displayActivity(IList<Activity> activities)
+        {
+            foreach (Activity activity in activities)
             {
-                // Print out the message from the bot.
-                Console.WriteLine(activity.Text);
+                // Print out the message
+                // format is {activity.Id} {activity.Text} for debugging.
+                Console.WriteLine(activity.Id + "\t" + activity.Text);
+
             }
         }
 
