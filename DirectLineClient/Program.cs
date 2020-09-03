@@ -17,6 +17,7 @@ namespace DirectLineClient
 
         private static string _directLineSecret = ConfigurationManager.AppSettings["DirectLineSecret"];
         private static string _botId = ConfigurationManager.AppSettings["BotId"];
+        private static string _directLineEndpoint = ConfigurationManager.AppSettings["BotDirectLineEndpoint"];
 
         // fromUser is the field that identifies which user is sending activities to the Direct Line service.
         // Because this value is created and sent within your Direct Line client, your bot should not
@@ -68,12 +69,17 @@ namespace DirectLineClient
         private static async Task startBotConversationAsync()
         {
             // Obtain a token using the Direct Line secret
-            var tokenResponse = await new DirectLineClientConnection(_directLineSecret).Tokens.GenerateTokenForNewConversationAsync();
+            var tokenClient = new DirectLineClientConnection(
+                                            new Uri(_directLineEndpoint),
+                                            new DirectLineClientCredentials(_directLineSecret));
 
-            // Use token to create conversation
-            var directLineClient = new DirectLineClientConnection(tokenResponse.Token);
-            var conversation = await directLineClient.Conversations.StartConversationAsync();
+            var conversation = await tokenClient.Tokens.GenerateTokenForNewConversationAsync();
 
+            // Use token to create a new directline client specific for the conversation
+            var directLineClient = new DirectLineClientConnection(
+                                            new Uri(_directLineEndpoint),
+                                            new DirectLineClientCredentials(conversation.Token));
+    
             await startWebSocketConnectionAsync(directLineClient, conversation);
         }
 
@@ -84,15 +90,17 @@ namespace DirectLineClient
         private static async Task continueExistingBotConversationAsync(string conversationId, string watermark = null)
         {
             // Initialize a DirectLineClient using the secret.
-            var directLineClient = new DirectLineClientConnection(_directLineSecret);
+            var directLineClient = new DirectLineClientConnection(
+                                            new Uri(_directLineEndpoint),
+                                            new DirectLineClientCredentials(_directLineSecret));
 
             // Since we are trying to continue a previous conversation, we reconnect to it via conversation ID.
-            // If we pass a watermark, it would retrieve all the messages starting from the watermark
-            // and send it to us via OnMessage Event.
             var conversation = await directLineClient.Conversations.ReconnectToConversationAsync(conversationId);
 
-            // We create a connection specific for the conversation
-            var convDirectLineClient = new DirectLineClientConnection(conversation.Token);
+            // We create a new connection specific for the conversation
+            var convDirectLineClient = new DirectLineClientConnection(
+                                            new Uri(_directLineEndpoint),
+                                            new DirectLineClientCredentials(conversation.Token));
 
             // We start the web socket connection.
             await startWebSocketConnectionAsync(convDirectLineClient, conversation, watermark);
@@ -100,86 +108,140 @@ namespace DirectLineClient
 
         private static async Task startWebSocketConnectionAsync(DirectLineClientConnection directLineClient, Conversation conversation, string watermark = null)
         {
-            try
+            // Establish the web sockets connection
+            await directLineClient.StreamingConversations.ConnectAsync(
+                conversation.ConversationId,
+                ReceiveActivities);
+
+            Console.WriteLine("");
+            Console.WriteLine("- Successfully connected via WebSockets");
+            Console.WriteLine("- Starting conversation - " + conversation.ConversationId);
+            Console.WriteLine("");
+
+            //// we wait for the sockets to receive and display initial messages.
+            //if (watermark != null)
+            //{
+            //    var activityHistory = await directLineClient.Conversations.GetActivitiesAsync(conversation.ConversationId, watermark);
+            //    ReceiveActivities(activityHistory);
+            //}
+
+            var userInput = string.Empty;
+
+            do
             {
-                using (var webSocketClient = new WebSocket(conversation.StreamUrl))
+                Console.Write("You: ");
+                userInput = Console.ReadLine().Trim();
+
+                if (userInput != _exitTriggerPhrase
+                    && userInput.Length > 0)
                 {
-                    // You have to specify TLS version to 1.2 or connection will be failed in handshake.
-                    webSocketClient.SslConfiguration.EnabledSslProtocols = System.Security.Authentication.SslProtocols.Tls12;
-
-                    webSocketClient.OnMessage += WebSocketClient_OnMessage;
-                    webSocketClient.Connect();
-
-                    var userInput = string.Empty;
-
-                    Console.WriteLine("");
-                    Console.WriteLine("- Successfully connected via WebSockets.");
-                    Console.WriteLine("- Starting conversation - " + conversation.ConversationId);
-                    Console.WriteLine("");
-
-                    // we wait for the sockets to receive and display initial messages.
-                    if (watermark != null)
+                    Activity userMessage = new Activity
                     {
-                        var activityHistory = await directLineClient.Conversations.GetActivitiesAsync(conversation.ConversationId, watermark);
-                        displayActivity(activityHistory.Activities);
-                    }
+                        From = new ChannelAccount(_fromUser),
+                        Text = userInput,
+                        Type = ActivityTypes.Message
+                    };
 
-                    do
-                    {
-                        Console.Write("You: ");
-                        userInput = Console.ReadLine().Trim();
-
-                        if (userInput != _exitTriggerPhrase
-                            && userInput.Length > 0)
-                        {
-                            Activity userMessage = new Activity
-                            {
-                                From = new ChannelAccount(_fromUser),
-                                Text = userInput,
-                                Type = ActivityTypes.Message
-                            };
-
-                            await directLineClient.Conversations.PostActivityAsync(conversation.ConversationId, userMessage);
-                        }
-
-                    } 
-                    while (userInput != _exitTriggerPhrase);
+                    await directLineClient.StreamingConversations.PostActivityAsync(conversation.ConversationId, userMessage);
                 }
             }
-            catch (Exception ex)
-            {
-                Console.WriteLine("There was a problem with the web socket connection.");
-                Console.WriteLine(ex.Message);
-            }
+            while (userInput != _exitTriggerPhrase);
+
+            //try
+            //{
+            //    using (var webSocketClient = new WebSocket(conversation.StreamUrl))
+            //    {
+            //        // You have to specify TLS version to 1.2 or connection will be failed in handshake.
+            //        webSocketClient.SslConfiguration.EnabledSslProtocols = System.Security.Authentication.SslProtocols.Tls12;
+
+            //        webSocketClient.OnMessage += WebSocketClient_OnMessage;
+            //        webSocketClient.Connect();
+
+            //        var userInput = string.Empty;
+
+            //        Console.WriteLine("");
+            //        Console.WriteLine("- Successfully connected via WebSockets.");
+            //        Console.WriteLine("- Starting conversation - " + conversation.ConversationId);
+            //        Console.WriteLine("");
+
+            //        // we wait for the sockets to receive and display initial messages.
+            //        if (watermark != null)
+            //        {
+            //            var activityHistory = await directLineClient.Conversations.GetActivitiesAsync(conversation.ConversationId, watermark);
+            //            displayActivity(activityHistory.Activities);
+            //        }
+
+            //        do
+            //        {
+            //            Console.Write("You: ");
+            //            userInput = Console.ReadLine().Trim();
+
+            //            if (userInput != _exitTriggerPhrase
+            //                && userInput.Length > 0)
+            //            {
+            //                Activity userMessage = new Activity
+            //                {
+            //                    From = new ChannelAccount(_fromUser),
+            //                    Text = userInput,
+            //                    Type = ActivityTypes.Message
+            //                };
+
+            //                await directLineClient.Conversations.PostActivityAsync(conversation.ConversationId, userMessage);
+            //            }
+
+            //        } 
+            //        while (userInput != _exitTriggerPhrase);
+            //    }
+            //}
+            //catch (Exception ex)
+            //{
+            //    Console.WriteLine("There was a problem with the web socket connection.");
+            //    Console.WriteLine(ex.Message);
+            //}
         }
 
-        private static void WebSocketClient_OnMessage(object sender, MessageEventArgs e)
+        public static void ReceiveActivities(ActivitySet activitySet)
         {
-            // Occasionally, the Direct Line service sends an empty message as a liveness ping. 
-            // Ignore these messages.
-            if (string.IsNullOrWhiteSpace(e.Data))
+            if (activitySet != null)
             {
-                return;
-            }
-
-            var activitySet = JsonConvert.DeserializeObject<ActivitySet>(e.Data);
-            //var activities = from x in activitySet.Activities
-            //                 where x.From.Id == _botId
-            //                 select x;
-
-            displayActivity(activitySet.Activities);
-        }
-
-        private static void displayActivity(IList<Activity> activities)
-        {
-            foreach (Activity activity in activities)
-            {
-                // Print out the message
-                // format is {activity.Id} {activity.Text} for debugging.
-                Console.WriteLine(activity.Id + "\t" + activity.Text);
-
+                foreach (var a in activitySet.Activities)
+                {
+                    if (a.Type == ActivityTypes.Message)
+                    {
+                        Console.WriteLine($"<Bot>: {a.Text}");
+                    }
+                }
             }
         }
+
+
+        //private static void WebSocketClient_OnMessage(object sender, MessageEventArgs e)
+        //{
+        //    // Occasionally, the Direct Line service sends an empty message as a liveness ping. 
+        //    // Ignore these messages.
+        //    if (string.IsNullOrWhiteSpace(e.Data))
+        //    {
+        //        return;
+        //    }
+
+        //    var activitySet = JsonConvert.DeserializeObject<ActivitySet>(e.Data);
+        //    //var activities = from x in activitySet.Activities
+        //    //                 where x.From.Id == _botId
+        //    //                 select x;
+
+        //    displayActivity(activitySet.Activities);
+        //}
+
+        //private static void displayActivity(IList<Activity> activities)
+        //{
+        //    foreach (Activity activity in activities)
+        //    {
+        //        // Print out the message
+        //        // format is {activity.Id} {activity.Text} for debugging.
+        //        Console.WriteLine(activity.Id + "\t" + activity.Text);
+
+        //    }
+        //}
 
         #endregion
     }
