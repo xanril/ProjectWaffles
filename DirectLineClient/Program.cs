@@ -1,15 +1,11 @@
 ﻿using System;
-using System.Collections;
-using System.Collections.Generic;
 using System.Configuration;
-using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Bot.Connector.DirectLine;
 using Newtonsoft.Json;
 using WebSocketSharp;
-using DirectLineClientConnection = Microsoft.Bot.Connector.DirectLine.DirectLineClient;
 
-namespace DirectLineClient
+namespace DirectLineConsole
 {
     public class Program
     {
@@ -68,10 +64,10 @@ namespace DirectLineClient
         private static async Task startBotConversationAsync()
         {
             // Obtain a token using the Direct Line secret
-            var tokenResponse = await new DirectLineClientConnection(_directLineSecret).Tokens.GenerateTokenForNewConversationAsync();
+            var tokenResponse = await new DirectLineClient(_directLineSecret).Tokens.GenerateTokenForNewConversationAsync();
 
             // Use token to create conversation
-            var directLineClient = new DirectLineClientConnection(tokenResponse.Token);
+            var directLineClient = new DirectLineClient(tokenResponse.Token);
             var conversation = await directLineClient.Conversations.StartConversationAsync();
 
             await startWebSocketConnectionAsync(directLineClient, conversation);
@@ -84,7 +80,7 @@ namespace DirectLineClient
         private static async Task continueExistingBotConversationAsync(string conversationId, string watermark = null)
         {
             // Initialize a DirectLineClient using the secret.
-            var directLineClient = new DirectLineClientConnection(_directLineSecret);
+            var directLineClient = new DirectLineClient(_directLineSecret);
 
             // Since we are trying to continue a previous conversation, we reconnect to it via conversation ID.
             // If we pass a watermark, it would retrieve all the messages starting from the watermark
@@ -92,13 +88,13 @@ namespace DirectLineClient
             var conversation = await directLineClient.Conversations.ReconnectToConversationAsync(conversationId);
 
             // We create a connection specific for the conversation
-            var convDirectLineClient = new DirectLineClientConnection(conversation.Token);
+            var convDirectLineClient = new DirectLineClient(conversation.Token);
 
             // We start the web socket connection.
             await startWebSocketConnectionAsync(convDirectLineClient, conversation, watermark);
         }
 
-        private static async Task startWebSocketConnectionAsync(DirectLineClientConnection directLineClient, Conversation conversation, string watermark = null)
+        private static async Task startWebSocketConnectionAsync(DirectLineClient directLineClient, Conversation conversation, string watermark = null)
         {
             try
             {
@@ -121,7 +117,7 @@ namespace DirectLineClient
                     if (watermark != null)
                     {
                         var activityHistory = await directLineClient.Conversations.GetActivitiesAsync(conversation.ConversationId, watermark);
-                        displayActivity(activityHistory.Activities);
+                        displayActivity(activityHistory);
                     }
 
                     do
@@ -163,16 +159,23 @@ namespace DirectLineClient
             }
 
             var activitySet = JsonConvert.DeserializeObject<ActivitySet>(e.Data);
+
+            // filter only activities from the bot
             //var activities = from x in activitySet.Activities
             //                 where x.From.Id == _botId
             //                 select x;
 
-            displayActivity(activitySet.Activities);
+            displayActivity(activitySet);
         }
 
-        private static void displayActivity(IList<Activity> activities)
+        private static void displayActivity(ActivitySet activitySet)
         {
-            foreach (Activity activity in activities)
+            if (activitySet?.Activities == null)
+            {
+                return;
+            }
+
+            foreach (Activity activity in activitySet.Activities)
             {
                 // Print out the message
                 // format is {activity.Id} {activity.Text} for debugging.
