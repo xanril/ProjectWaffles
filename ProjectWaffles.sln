@@ -5,7 +5,7 @@ VisualStudioVersion = 16.0.29609.76
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ProjectWaffles.Bot", "ProjectWaffles.Bot\ProjectWaffles.Bot.csproj", "{CCD4E0C2-F8B9-489E-BC6A-C3F90E37F476}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DirectLineClient", "DirectLineClient\DirectLineClient.csproj", "{5FDB39FB-36AE-4116-BFC7-C5F3B878B0E6}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DirectLineConsole", "DirectLineClient\DirectLineConsole.csproj", "{5FDB39FB-36AE-4116-BFC7-C5F3B878B0E6}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
