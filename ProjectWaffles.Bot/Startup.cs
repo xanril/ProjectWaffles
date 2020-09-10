@@ -3,14 +3,16 @@
 //
 // Generated with Bot Builder V4 SDK Template for Visual Studio EchoBot v4.9.2
 
+using System.Collections.Concurrent;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Bot.Builder;
 using Microsoft.Bot.Builder.Integration.AspNet.Core;
+using Microsoft.Bot.Schema;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-
+using ProjectWaffles.Bot.Bots;
 using ProjectWaffles.Bots;
 
 namespace ProjectWaffles
@@ -32,11 +34,12 @@ namespace ProjectWaffles
             // Create the Bot Framework Adapter with error handling enabled.
             services.AddSingleton<IBotFrameworkHttpAdapter, AdapterWithErrorHandler>();
 
-            // Create the bot as a transient. In this case the ASP Controller is expecting an IBot.
-            services.AddTransient<IBot, EchoBot>();
+            // Create a global hashset for our ConversationReferences
+            services.AddSingleton<ConcurrentDictionary<string, ConversationReference>>();
 
-            // Add twitter adapter
-            services.AddTwitterAdapter(x => Configuration.Bind("TwitterOptions", x));
+            // Create the bot as a transient. In this case the ASP Controller is expecting an IBot.
+            //services.AddTransient<IBot, EchoBot>();
+            services.AddTransient<IBot, ProactiveBot>();
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
@@ -56,9 +59,6 @@ namespace ProjectWaffles
                 {
                     endpoints.MapControllers();
                 });
-
-            // register the middleware for twitter adapter
-            app.UseTwitterAdapter();
 
             // app.UseHttpsRedirection();
         }
