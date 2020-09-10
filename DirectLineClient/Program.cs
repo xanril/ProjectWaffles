@@ -70,7 +70,7 @@ namespace DirectLineConsole
             var directLineClient = new DirectLineClient(tokenResponse.Token);
             var conversation = await directLineClient.Conversations.StartConversationAsync();
 
-            await startWebSocketConnectionAsync(directLineClient, conversation);
+            await startWebSocketConnectionAsync(directLineClient, conversation, null, true);
         }
 
         /// <summary>
@@ -94,7 +94,7 @@ namespace DirectLineConsole
             await startWebSocketConnectionAsync(convDirectLineClient, conversation, watermark);
         }
 
-        private static async Task startWebSocketConnectionAsync(DirectLineClient directLineClient, Conversation conversation, string watermark = null)
+        private static async Task startWebSocketConnectionAsync(DirectLineClient directLineClient, Conversation conversation, string watermark = null, bool isNewConversation = false)
         {
             try
             {
@@ -112,6 +112,19 @@ namespace DirectLineConsole
                     Console.WriteLine("- Successfully connected via WebSockets.");
                     Console.WriteLine("- Starting conversation - " + conversation.ConversationId);
                     Console.WriteLine("");
+
+                    if (isNewConversation)
+                    {
+                        // we send a conversation update activity to start the session
+
+                        Activity userMessage = new Activity
+                        {
+                            From = new ChannelAccount(_fromUser),
+                            Type = ActivityTypes.Ping
+                        };
+
+                        await directLineClient.Conversations.PostActivityAsync(conversation.ConversationId, userMessage);
+                    }
 
                     // we wait for the sockets to receive and display initial messages.
                     if (watermark != null)
@@ -179,9 +192,16 @@ namespace DirectLineConsole
             {
                 // Print out the message
                 // format is {activity.Id} {activity.Text} for debugging.
-                Console.WriteLine(activity.Id + "\t" + activity.Text);
+                Console.WriteLine(trimActivityId(activity.Id) + "\t" + activity.Text);
 
             }
+        }
+
+
+        private static string trimActivityId(string activityId)
+        {
+            var splitItems = activityId.Split('|', StringSplitOptions.RemoveEmptyEntries);
+            return splitItems?.GetValue(splitItems.Length - 1) as string ?? string.Empty;
         }
 
         #endregion
