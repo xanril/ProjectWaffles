@@ -27,6 +27,17 @@ namespace ProjectWaffles
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
+            // setup the storage
+            var storage = new MemoryStorage();
+
+            // Create the User state passing in the storage layer.
+            var userState = new UserState(storage);
+            services.AddSingleton(userState);
+
+            // Create the Conversation state passing in the storage layer.
+            var conversationState = new ConversationState(storage);
+            services.AddSingleton(conversationState);
+
             services.AddControllers().AddNewtonsoftJson();
 
             // Create the Bot Framework Adapter with error handling enabled.
